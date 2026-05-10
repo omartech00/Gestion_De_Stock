@@ -1,12 +1,73 @@
 from django.contrib import admin
-from .models import Categorie, Fournisseur, Produit, Stock, Client, Commande, ArticleCommande
+from django.contrib.auth.admin import UserAdmin
+from .models import (
+    User, Administrateur, Vendeur,
+    Fournisseur, Produit,
+    Commande, LigneCommande,
+    Vente
+)
 
-# Register your models here.
 
-admin.site.register(Categorie)
-admin.site.register(Fournisseur)
-admin.site.register(Produit)
-admin.site.register(Stock)
-admin.site.register(Client)
-admin.site.register(Commande)
-admin.site.register(ArticleCommande)
+# ─── Utilisateurs ───────────────────────
+
+@admin.register(User)
+class CustomUserAdmin(UserAdmin):
+    list_display  = ('username', 'email', 'first_name', 'last_name', 'is_staff')
+    search_fields = ('username', 'email')
+
+
+@admin.register(Administrateur)
+class AdministrateurAdmin(UserAdmin):
+    list_display  = ('username', 'email', 'first_name', 'last_name')
+    search_fields = ('username', 'email')
+
+
+@admin.register(Vendeur)
+class VendeurAdmin(UserAdmin):
+    list_display  = ('username', 'email', 'first_name', 'last_name')
+    search_fields = ('username', 'email')
+
+
+# ─── Fournisseur ────────────────────────
+
+@admin.register(Fournisseur)
+class FournisseurAdmin(admin.ModelAdmin):
+    list_display  = ('societe', 'contact')
+    search_fields = ('societe',)
+
+
+# ─── Produit ────────────────────────────
+
+@admin.register(Produit)
+class ProduitAdmin(admin.ModelAdmin):
+    list_display  = ('libelle', 'prix_unitaire', 'quantite', 'seuil_alert', 'fournisseur', 'administrateur')
+    list_filter   = ('fournisseur', 'administrateur')
+    search_fields = ('libelle',)
+
+
+# ─── Commande ───────────────────────────
+
+class LigneCommandeInline(admin.TabularInline):
+    model  = LigneCommande
+    extra  = 1
+
+
+@admin.register(Commande)
+class CommandeAdmin(admin.ModelAdmin):
+    list_display  = ('id', 'administrateur', 'fournisseur', 'date_commande', 'contact')
+    list_filter   = ('fournisseur', 'administrateur')
+    inlines       = [LigneCommandeInline]
+
+
+@admin.register(LigneCommande)
+class LigneCommandeAdmin(admin.ModelAdmin):
+    list_display  = ('commande', 'produit', 'quantite', 'prix')
+
+
+# ─── Vente ──────────────────────────────
+
+@admin.register(Vente)
+class VenteAdmin(admin.ModelAdmin):
+    list_display  = ('id', 'produit', 'vendeur', 'quantite_vendue', 'montant_total', 'data')
+    list_filter   = ('vendeur', 'produit')
+    search_fields = ('produit__libelle',)

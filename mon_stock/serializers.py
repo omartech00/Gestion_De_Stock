@@ -1,52 +1,140 @@
 from rest_framework import serializers
-from .models import Categorie, Fournisseur, Produit, Stock, Client, Commande, ArticleCommande
+from .models import (
+    User, Administrateur, Vendeur,
+    Fournisseur, Produit,
+    Commande, LigneCommande,
+    Vente
+)
 
-class CategorieSerializer(serializers.ModelSerializer):
+
+# ─────────────────────────────────────────
+#  Utilisateurs
+# ─────────────────────────────────────────
+
+class UserSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Categorie
-        fields = '__all__'
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name']
+
+
+class AdministrateurSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Administrateur
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'password']
+        extra_kwargs = {'password': {'write_only': True}}
+
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        admin = Administrateur(**validated_data)
+        admin.set_password(password)
+        admin.is_staff = True
+        admin.save()
+        return admin
+
+
+class VendeurSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vendeur
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'password']
+        extra_kwargs = {'password': {'write_only': True}}
+
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        vendeur = Vendeur(**validated_data)
+        vendeur.set_password(password)
+        vendeur.save()
+        return vendeur
+
+
+# ─────────────────────────────────────────
+#  Fournisseur
+# ─────────────────────────────────────────
 
 class FournisseurSerializer(serializers.ModelSerializer):
     class Meta:
         model = Fournisseur
         fields = '__all__'
 
+
+# ─────────────────────────────────────────
+#  Produit
+# ─────────────────────────────────────────
+
 class ProduitSerializer(serializers.ModelSerializer):
-    categorie = CategorieSerializer(read_only=True)
-    fournisseur = FournisseurSerializer(read_only=True)
-    categorie_id = serializers.IntegerField(write_only=True)
-    fournisseur_id = serializers.IntegerField(write_only=True)
+    # Lecture : objets imbriqués
+    fournisseur         = FournisseurSerializer(read_only=True)
+    administrateur      = AdministrateurSerializer(read_only=True)
+    en_alerte           = serializers.SerializerMethodField()
+
+    # Écriture : IDs uniquement
+    fournisseur_id      = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    administrateur_id   = serializers.IntegerField(write_only=True)
 
     class Meta:
         model = Produit
-        fields = '__all__'
+        fields = [
+            'id', 'libelle', 'prix_unitaire', 'quantite', 'seuil_alert',
+            'fournisseur', 'fournisseur_id',
+            'administrateur', 'administrateur_id',
+            'en_alerte',
+        ]
 
-class StockSerializer(serializers.ModelSerializer):
-    produit = ProduitSerializer(read_only=True)
-    produit_id = serializers.IntegerField(write_only=True)
+    def get_en_alerte(self, obj):
+        return obj.verifier_seuil()
+
+
+# ─────────────────────────────────────────
+#  Commande
+# ─────────────────────────────────────────
+
+class LigneCommandeSerializer(serializers.ModelSerializer):
+    produit     = ProduitSerializer(read_only=True)
+    produit_id  = serializers.IntegerField(write_only=True)
 
     class Meta:
-        model = Stock
-        fields = '__all__'
+        model = LigneCommande
+        fields = ['id', 'produit', 'produit_id', 'quantite', 'prix']
 
-class ClientSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Client
-        fields = '__all__'
-
-class ArticleCommandeSerializer(serializers.ModelSerializer):
-    produit = ProduitSerializer(read_only=True)
-    produit_id = serializers.IntegerField(write_only=True)
-
-    class Meta:
-        model = ArticleCommande
-        fields = '__all__'
 
 class CommandeSerializer(serializers.ModelSerializer):
-    client = ClientSerializer(read_only=True)
-    client_id = serializers.IntegerField(write_only=True)
-    articles = ArticleCommandeSerializer(source='articlecommande_set', many=True, read_only=True)
+    # Lecture
+    administrateur  = AdministrateurSerializer(read_only=True)
+    fournisseur     = FournisseurSerializer(read_only=True)
+    lignes          = LigneCommandeSerializer(
+                        source='lignecommande_set', many=True, read_only=True
+                      )
+
+    # Écriture
+    administrateur_id   = serializers.IntegerField(write_only=True)
+    fournisseur_id      = serializers.IntegerField(write_only=True)
 
     class Meta:
         model = Commande
-        fields = '__all__'
+        fields = [
+            'id', 'contact', 'date_commande',
+            'administrateur', 'administrateur_id',
+            'fournisseur', 'fournisseur_id',
+            'lignes',
+        ]
+
+
+# ─────────────────────────────────────────
+#  Vente
+# ─────────────────────────────────────────
+
+class VenteSerializer(serializers.ModelSerializer):
+    # Lecture
+    vendeur     = VendeurSerializer(read_only=True)
+    produit     = ProduitSerializer(read_only=True)
+
+    # Écriture
+    vendeur_id  = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    produit_id  = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = Vente
+        fields = [
+            'id', 'data', 'montant_total', 'quantite_vendue',
+            'vendeur', 'vendeur_id',
+            'produit', 'produit_id',
+        ]

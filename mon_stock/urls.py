@@ -2,15 +2,22 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
 
-
 router = DefaultRouter()
-router.register(r'categories', views.CategorieViewSet)
-router.register(r'fournisseurs', views.FournisseurViewSet)
-router.register(r'produits', views.ProduitViewSet)
-router.register(r'stocks', views.StockViewSet)
-router.register(r'clients', views.ClientViewSet)
-router.register(r'commandes', views.CommandeViewSet)
-router.register(r'articles-commande', views.ArticleCommandeViewSet)
+
+# Utilisateurs
+router.register(r'administrateurs',     views.AdministrateurViewSet,     basename='administrateur')
+router.register(r'vendeurs',            views.VendeurViewSet,            basename='vendeur')
+
+# Catalogue & stock
+router.register(r'fournisseurs',        views.FournisseurViewSet,        basename='fournisseur')
+router.register(r'produits',            views.ProduitViewSet,            basename='produit')
+
+# Commandes
+router.register(r'commandes',           views.CommandeViewSet,           basename='commande')
+router.register(r'lignes-commande',     views.LigneCommandeViewSet,      basename='ligne-commande')
+
+# Ventes
+router.register(r'ventes',             views.VenteViewSet,              basename='vente')
 
 urlpatterns = [
     path('', include(router.urls)),
