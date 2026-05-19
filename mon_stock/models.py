@@ -129,25 +129,13 @@ class Commande(models.Model):
     contact = models.CharField(max_length=200, blank=True)
 
     # Effectuée par un Administrateur (1 → 1.n)
-    administrateur = models.ForeignKey(
-        Administrateur,
-        on_delete=models.CASCADE,
-        related_name="commandes"
-    )
+    administrateur = models.ForeignKey(Administrateur, on_delete=models.CASCADE, related_name="commandes")
 
     # Livrée par un Fournisseur (1 → 1.n)
-    fournisseur = models.ForeignKey(
-        Fournisseur,
-        on_delete=models.CASCADE,
-        related_name="commandes"
-    )
+    fournisseur = models.ForeignKey(Fournisseur, on_delete=models.CASCADE, related_name="commandes")
 
     # Concerne plusieurs Produits (relation M2M avec quantité → table intermédiaire)
-    produits = models.ManyToManyField(
-        Produit,
-        through="LigneCommande",
-        related_name="commandes"
-    )
+    produits = models.ManyToManyField(Produit, through="LigneCommande", related_name="commandes")
 
     date_commande = models.DateTimeField(auto_now_add=True)
 
@@ -175,46 +163,48 @@ class LigneCommande(models.Model):
 
 
 # ─────────────────────────────────────────
-#  Vente  (réalisée par un Vendeur,
-#          porte sur un Produit)
+#  Vente  (réalisée par un Vendeur)
 # ─────────────────────────────────────────
 
 class Vente(models.Model):
-    data          = models.DateTimeField(auto_now_add=True)
+    data = models.DateTimeField(auto_now_add=True)
     montant_total = models.FloatField(default=0)
 
     # Validée par un Vendeur (1 → 0..1)
-    vendeur = models.ForeignKey(
-        Vendeur,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="ventes"
-    )
+    vendeur = models.ForeignKey(Vendeur, on_delete=models.SET_NULL, null=True, blank=True, related_name="ventes")
 
-    # Porte sur un Produit (0..1 → 1)
-    produit = models.ForeignKey(
-        Produit,
-        on_delete=models.CASCADE,
-        related_name="ventes"
-    )
-
-    quantite_vendue = models.IntegerField(default=1)
+    # Porte sur plusieurs Produits (relation M2M avec quantité → table intermédiaire)
+    produits = models.ManyToManyField(Produit, through="LigneVente", related_name="ventes")
 
     def generer_facture(self) -> str:
         """Retourne une représentation simple de la facture."""
-        return (
-            f"Facture Vente #{self.id}\n"
-            f"Produit : {self.produit.libelle}\n"
-            f"Quantité : {self.quantite_vendue}\n"
-            f"Total : {self.montant_total} FCFA\n"
-            f"Vendeur : {self.vendeur}\n"
-            f"Date : {self.data}"
-        )
+        lignes = self.lignevente_set.all()
+        facture = f"Facture Vente #{self.id}\n"
+        for ligne in lignes:
+            facture += f"  - {ligne.quantite} × {ligne.produit.libelle} @ {ligne.prix} FCFA\n"
+        facture += f"Total : {self.montant_total} FCFA\n"
+        facture += f"Vendeur : {self.vendeur}\n"
+        facture += f"Date : {self.data}"
+        return facture
 
     def __str__(self):
-        return f"Vente #{self.id} — {self.produit.libelle}"
+        return f"Vente #{self.id}"
 
     class Meta:
         verbose_name = "Vente"
         verbose_name_plural = "Ventes"
+
+
+class LigneVente(models.Model):
+    """Table intermédiaire Vente ↔ Produit (quantité vendue, prix)."""
+    vente     = models.ForeignKey(Vente, on_delete=models.CASCADE)
+    produit   = models.ForeignKey(Produit, on_delete=models.CASCADE)
+    quantite  = models.IntegerField(default=1)
+    prix      = models.FloatField()
+
+    def __str__(self):
+        return f"{self.quantite} × {self.produit.libelle}"
+
+    class Meta:
+        verbose_name = "Ligne de vente"
+        verbose_name_plural = "Lignes de vente"

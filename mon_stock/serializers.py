@@ -3,7 +3,7 @@ from .models import (
     User, Administrateur, Vendeur,
     Fournisseur, Produit,
     Commande, LigneCommande,
-    Vente
+    Vente, LigneVente
 )
 
 
@@ -122,19 +122,43 @@ class CommandeSerializer(serializers.ModelSerializer):
 #  Vente
 # ─────────────────────────────────────────
 
+class LigneVenteSerializer(serializers.ModelSerializer):
+    produit     = ProduitSerializer(read_only=True)
+    produit_id  = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = LigneVente
+        fields = ['id', 'produit', 'produit_id', 'quantite', 'prix']
+
+
 class VenteSerializer(serializers.ModelSerializer):
     # Lecture
     vendeur     = VendeurSerializer(read_only=True)
-    produit     = ProduitSerializer(read_only=True)
+    lignes      = LigneVenteSerializer(
+                    source='lignevente_set', many=True, read_only=True
+                  )
 
     # Écriture
     vendeur_id  = serializers.IntegerField(write_only=True, required=False, allow_null=True)
-    produit_id  = serializers.IntegerField(write_only=True)
+    lignes_write = LigneVenteSerializer(many=True, write_only=True)
 
     class Meta:
         model = Vente
         fields = [
-            'id', 'data', 'montant_total', 'quantite_vendue',
+            'id', 'data', 'montant_total',
             'vendeur', 'vendeur_id',
-            'produit', 'produit_id',
+            'lignes',
+            'lignes_write',
         ]
+
+    def create(self, validated_data):
+        lignes_data = validated_data.pop('lignes_write')
+        vente = Vente.objects.create(**validated_data)
+        for ligne in lignes_data:
+            LigneVente.objects.create(
+                vente=vente,
+                produit_id=ligne['produit_id'],
+                quantite=ligne['quantite'],
+                prix=ligne['prix']
+            )
+        return vente

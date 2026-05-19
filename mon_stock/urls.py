@@ -18,6 +18,7 @@ router.register(r'lignes-commande',     views.LigneCommandeViewSet,      basenam
 
 # Ventes
 router.register(r'ventes',             views.VenteViewSet,              basename='vente')
+router.register(r'lignes-vente',       views.LigneVenteViewSet,         basename='ligne-vente')
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -4,7 +4,7 @@ from .models import (
     User, Administrateur, Vendeur,
     Fournisseur, Produit,
     Commande, LigneCommande,
-    Vente
+    Vente, LigneVente
 )
 
 
@@ -66,8 +66,20 @@ class LigneCommandeAdmin(admin.ModelAdmin):
 
 # ─── Vente ──────────────────────────────
 
+class LigneVenteInline(admin.TabularInline):
+    model  = LigneVente
+    extra  = 1
+
+
 @admin.register(Vente)
 class VenteAdmin(admin.ModelAdmin):
-    list_display  = ('id', 'produit', 'vendeur', 'quantite_vendue', 'montant_total', 'data')
-    list_filter   = ('vendeur', 'produit')
-    search_fields = ('produit__libelle',)
+    list_display  = ('id', 'vendeur', 'montant_total', 'data')
+    list_filter   = ('vendeur', 'data')
+    search_fields = ('vendeur__username',)
+    inlines       = [LigneVenteInline]
+
+
+@admin.register(LigneVente)
+class LigneVenteAdmin(admin.ModelAdmin):
+    list_display  = ('vente', 'produit', 'quantite', 'prix')
+    

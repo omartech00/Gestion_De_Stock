@@ -7,13 +7,13 @@ from .models import (
     Administrateur, Vendeur,
     Fournisseur, Produit,
     Commande, LigneCommande,
-    Vente
+    Vente, LigneVente
 )
 from .serializers import (
     AdministrateurSerializer, VendeurSerializer,
     FournisseurSerializer, ProduitSerializer,
     CommandeSerializer, LigneCommandeSerializer,
-    VenteSerializer
+    VenteSerializer, LigneVenteSerializer
 )
 from .permissions import IsAdminAuthenticated, IsVendeurAuthenticated, IsAdminOrVendeur
 
@@ -82,7 +82,9 @@ class ProduitViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.request.method in SAFE_METHODS:
             return [IsAdminOrVendeur()]
-        return [IsAdminAuthenticated()]
+        if self.request.method == 'PATCH':
+            return [IsAdminOrVendeur()]   # ← vendeur peut mettre à jour le stock
+        return [IsAdminAuthenticated()]   # POST, PUT, DELETE → admin seulement
 
     @action(detail=False, methods=['get'], url_path='alertes',
             permission_classes=[IsAdminOrVendeur])
@@ -126,6 +128,25 @@ class LigneCommandeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminAuthenticated]
 
 
+class LigneVenteViewSet(viewsets.ModelViewSet):
+    """
+    CRUD sur les lignes de vente.
+    Réservé aux administrateurs et vendeurs (leur propres ventes).
+    """
+    serializer_class = LigneVenteSerializer
+    permission_classes = [IsAdminOrVendeur]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = LigneVente.objects.select_related('vente', 'produit')
+        
+        if Administrateur.objects.filter(pk=user.pk).exists():
+            return queryset
+        
+        # Le vendeur ne voit que ses lignes de vente
+        return queryset.filter(vente__vendeur__pk=user.pk)
+
+
 # ─────────────────────────────────────────
 #  Vente
 # ─────────────────────────────────────────
@@ -147,21 +168,15 @@ class VenteViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if Administrateur.objects.filter(pk=user.pk).exists():
-            return Vente.objects.select_related('vendeur', 'produit').all()
+            return Vente.objects.prefetch_related('lignevente_set').select_related('vendeur').all()
 
         # Le vendeur ne voit que ses ventes
-        return Vente.objects.select_related('vendeur', 'produit').filter(vendeur__pk=user.pk)
+        return Vente.objects.prefetch_related('lignevente_set').select_related('vendeur').filter(vendeur__pk=user.pk)
 
+    # ✅ Correct
     def perform_create(self, serializer):
-        """Assigne automatiquement le vendeur connecté et calcule le montant total."""
-        produit_id      = serializer.validated_data.get('produit_id')
-        quantite_vendue = serializer.validated_data.get('quantite_vendue', 1)
-
-        produit = Produit.objects.get(pk=produit_id)
-        montant_total = produit.prix_unitaire * quantite_vendue
-
-        # Mise à jour du stock
-        produit.update_stock(-quantite_vendue)
+        lignes = serializer.validated_data.get('lignes_write', [])
+        montant_total = sum(ligne['quantite'] * ligne['prix'] for ligne in lignes)
 
         try:
             vendeur = Vendeur.objects.get(pk=self.request.user.pk)
